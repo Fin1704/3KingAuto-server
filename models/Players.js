@@ -77,10 +77,7 @@ const Player = sequelize.define('Player', {
         type: DataTypes.STRING(CONSTANTS.PASSWORD_MAX_LENGTH),
         allowNull: false,
         validate: validations.password,
-        set(value) {
-            const hashedPassword = bcrypt.hashSync(value, CONSTANTS.SALT_ROUNDS);
-            this.setDataValue('password', hashedPassword);
-        }
+      
     },
     gems: {
         type: DataTypes.INTEGER.UNSIGNED,

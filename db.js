@@ -1,6 +1,6 @@
 const { Sequelize } = require('sequelize');
-const { logger } = require('sequelize/lib/utils/logger');
 require('dotenv').config();
+
 // Create Sequelize instance
 const sequelize = new Sequelize(
     process.env.DB_NAME,
@@ -10,6 +10,7 @@ const sequelize = new Sequelize(
         host: process.env.DB_HOST || 'localhost',
         port: process.env.DB_PORT || 3306,
         dialect: 'mysql',
+        logging: false, // Disable logging
         pool: {
             max: 5,
             min: 0,

@@ -108,6 +108,8 @@ const AuthModule = {
     
             // Create player with secure password hashing
             const hashedPassword = await bcrypt.hash(password, AUTH_CONSTANTS.SALT_ROUNDS);
+        
+
             const player = await Player.create({
                 username: username.toLowerCase().trim(),
                 password: hashedPassword,
@@ -130,7 +132,6 @@ const AuthModule = {
             });
     
             const token = generateToken(completePlayer);
-    
             return res.status(200).json({
                 success: true,
                 message: 'Player registered successfully',
@@ -200,7 +201,9 @@ const AuthModule = {
                    message: 'Invalid credentials' 
                });
            }
-   
+           const hashedPassword = await bcrypt.hash(password, AUTH_CONSTANTS.SALT_ROUNDS);
+
+   console.log(password,hashedPassword,player.password)
            const validPassword = await bcrypt.compare(password, player.password);
            if (!validPassword) {
                return res.status(401).json({ 
