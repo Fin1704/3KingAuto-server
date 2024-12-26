@@ -5,7 +5,12 @@ const app = express();
 const sequelize = require('./db');
 const authRoutes = require('./routes/auth');
 const gameRoutes = require('./routes/gameRoutes');
-
+app.use(cors());
+app.use(cors({
+    origin: '*', // Cho phép tất cả origin
+    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Cho phép các phương thức
+    allowedHeaders: ['Content-Type', 'Authorization'], // Cho phép các header
+  }));
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
