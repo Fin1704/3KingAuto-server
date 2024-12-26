@@ -49,380 +49,363 @@ function generateRandomString() {
 }
 // Game module
 const GameModule = {
-    async killMonster(req, res) {
-        const transaction = await Player.sequelize.transaction();
+   async killMonster(req, res) {
+       try {
+           const player = req.player;
+   
+           // Calculate rewards
+           const gems = calculateRewards();
+   
+           // Update player gems
+           const [updateCount] = await Player.update({
+               gems: player.gems + gems,
+           }, {
+               where: {
+                   id: player.id,
+               }
+           });
+   
+           if (updateCount === 0) {
+               throw new Error("Player update failed");
+           }
+   
+           // Get updated player data
+           const updatedPlayer = await Player.findByPk(player.id);
+   
+           if (!updatedPlayer) {
+               throw new Error("Player update failed");
+           }
+   
+           // Cache invalidation
+           await invalidatePlayerCache(player.id);
+   
+           return res.json(formatResponse(
+               true,
+               {
+                   rewards: { gems },
+                   newTotals: {
+                       gems: updatedPlayer.gems,
+                   }
+               },
+               `You earned ${gems} gems!`
+           ));
+   
+       } catch (error) {
+           console.error('Error in killMonster:', error);
+   
+           if (error.name === 'SequelizeOptimisticLockError') {
+               return res.status(409).json(formatResponse(
+                   false,
+                   {},
+                   'Conflict detected. Please try again.'
+               ));
+           }
+   
+           return res.status(500).json(formatResponse(
+               false,
+               {},
+                   'Error processing monster kill reward'
+           ));
+       }
+   },
+   
 
-        try {
-            const player = req.player;
+   async summonBoss(req, res) {
+       try {
+           const player = req.player;
+   
+           if (player.gems < 200) {
+               return res.status(400).json(formatResponse(
+                   false,
+                   {},
+                   'Not enough gems to summon the boss.'
+               ));
+           }
+   
+           const bossCode = generateRandomString();
+           
+           // Update player's gems and bossCode
+           const [updateCount] = await Player.update({
+               gems: player.gems - 200,
+               bossCode: bossCode
+           }, {
+               where: {
+                   id: player.id,
+                   gems: player.gems // Add this condition to prevent race conditions
+               }
+           });
+   
+           if (updateCount === 0) {
+               return res.status(409).json(formatResponse(
+                   false,
+                   {},
+                   'Update failed. Please try again.'
+               ));
+           }
+   
+           // Get updated player data
+           const updatedPlayer = await Player.findByPk(player.id);
+   
+           if (!updatedPlayer) {
+               throw new Error("Player update failed");
+           }
+   
+           // Invalidate cache
+           await invalidatePlayerCache(player.id);
+   
+           return res.json({ code: bossCode });
+   
+       } catch (error) {
+           console.error('Error in summonBoss:', error);
+   
+           if (error.name === 'SequelizeOptimisticLockError') {
+               return res.status(409).json(formatResponse(
+                   false,
+                   {},
+                   'Conflict detected. Please try again.'
+               ));
+           }
+   
+           return res.status(500).json(formatResponse(
+               false,
+               {},
+               'Error processing boss summoning'
+           ));
+       }
+   },
+   
+async killBoss(req, res) {
+    try {
+        const player = req.player;
+        const { bossCode } = req.body; 
 
-            // Calculate rewards
-            const gems = calculateRewards();
-
-            await Player.update({
-                gems: player.gems + gems,
-            }, {
-                where: {
-                    id: player.id,
-                },
-                transaction
-            });
-
-            const updatedPlayer = await Player.findByPk(player.id, { transaction });
-
-            if (!updatedPlayer) {
-                throw new Error("Player update failed");
-            }
-
-            // Commit the transaction only after all operations are successful
-            await transaction.commit();
-
-            // Cache invalidation
-            await invalidatePlayerCache(player.id);
-
-            return res.json(formatResponse(
-                true,
-                {
-                    rewards: { gems },
-                    newTotals: {
-                        gems: updatedPlayer.gems,
-                    }
-                },
-                `You earned ${gems} gems!`
-            ));
-
-        } catch (error) {
-            // Rollback the transaction if there is any error
-            await transaction.rollback();
-            console.error('Error in killMonster:', error);
-
-            if (error.name === 'SequelizeOptimisticLockError') {
-                return res.status(409).json(formatResponse(
-                    false,
-                    {},
-                    'Conflict detected. Please try again.'
-                ));
-            }
-
-            return res.status(500).json(formatResponse(
+        if (!bossCode) {
+            return res.status(400).json(formatResponse(
                 false,
                 {},
-                'Error processing monster kill reward'
+                'Boss code is required.'
             ));
         }
-    },
 
-    async summonBoss(req, res) {
-        const transaction = await Player.sequelize.transaction();
-
-        try {
-            const player = req.player;
-
-            if (player.gems < 200) {
-                return res.status(400).json(formatResponse(
-                    false,
-                    {},
-                    'Not enough gems to summon the boss.'
-                ));
-            }
-            var bossCode = generateRandomString();
-            await Player.update({
-                gems: player.gems - 200,
-                bossCode: bossCode
-            }, {
-                where: {
-                    id: player.id,
-                },
-                transaction
-            });
-
-            const updatedPlayer = await Player.findByPk(player.id, { transaction });
-
-            if (!updatedPlayer) {
-                throw new Error("Player update failed");
-            }
-
-            await transaction.commit();
-
-            await invalidatePlayerCache(player.id);
-
-            return res.json({ code: bossCode });
-
-        } catch (error) {
-            // Rollback the transaction if there is any error
-            await transaction.rollback();
-            console.error('Error in summonBoss:', error);
-
-            if (error.name === 'SequelizeOptimisticLockError') {
-                return res.status(409).json(formatResponse(
-                    false,
-                    {},
-                    'Conflict detected. Please try again.'
-                ));
-            }
-
-            return res.status(500).json(formatResponse(
+        if (player.bossCode !== bossCode) {
+            return res.status(400).json(formatResponse(
                 false,
                 {},
-                'Error processing boss summoning'
+                'Invalid boss code. You failed to kill the boss.'
             ));
         }
-    },
-    async killBoss(req, res) {
-        const transaction = await Player.sequelize.transaction();
 
-        try {
-            const player = req.player;
-            const { bossCode } = req.body; 
-
-            if (!bossCode) {
-                return res.status(400).json(formatResponse(
-                    false,
-                    {},
-                    'Boss code is required.'
-                ));
+        // Update player's bossCode
+        await Player.update({
+            bossCode: null
+        }, {
+            where: {
+                id: player.id
             }
+        });
 
-            // Kiểm tra mã bossCode có khớp không
-            if (player.bossCode !== bossCode) {
-                return res.status(400).json(formatResponse(
-                    false,
-                    {},
-                    'Invalid boss code. You failed to kill the boss.'
-                ));
-            }
+        // Create random rune
+        const randomRuneId = Math.floor(Math.random() * 10) + 1;
+        const newRune = await Rune.create({
+            playerId: player.id,
+            runeId: randomRuneId,
+            isEquipped: false,
+            index: null
+        });
 
-            // Nếu khớp, xóa bossCode
-            await Player.update({
-                bossCode: null // Reset bossCode sau khi tiêu diệt boss
-            }, {
-                where: {
-                    id: player.id,
-                },
-                transaction
-            });
+        const updatedPlayer = await Player.findByPk(player.id);
 
-            // Tạo một Rune ngẫu nhiên cho người chơi
-            const randomRuneId = Math.floor(Math.random() * 10) + 1; // runeId từ 1 đến 10
-            const newRune = await Rune.create({
-                playerId: player.id,
-                runeId: randomRuneId,
-                isEquipped: false,
-                index: null,
-            }, { transaction });
+        if (!updatedPlayer) {
+            throw new Error("Player update failed");
+        }
 
-            const updatedPlayer = await Player.findByPk(player.id, { transaction });
+        // Cache invalidation
+        await invalidatePlayerCache(player.id);
 
-            if (!updatedPlayer) {
-                throw new Error("Player update failed");
-            }
+        return res.json(formatResponseWithRunes(
+            true,
+            { newRune },
+            'Boss defeated successfully! A new rune has been awarded.'
+        ));
 
-            // Hoàn tất giao dịch
-            await transaction.commit();
+    } catch (error) {
+        console.error('Error in killBoss:', error);
 
-            // Cache invalidation
-            await invalidatePlayerCache(player.id);
-
-            return res.json(formatResponseWithRunes(
-                true,
-                { newRune },
-                'Boss defeated successfully! A new rune has been awarded.'
-            ));
-
-        } catch (error) {
-            // Rollback nếu có lỗi xảy ra
-            await transaction.rollback();
-            console.error('Error in killBoss:', error);
-
-            if (error.name === 'SequelizeOptimisticLockError') {
-                return res.status(409).json(formatResponse(
-                    false,
-                    {},
-                    'Conflict detected. Please try again.'
-                ));
-            }
-
-            return res.status(500).json(formatResponse(
+        if (error.name === 'SequelizeOptimisticLockError') {
+            return res.status(409).json(formatResponse(
                 false,
                 {},
-                'Error processing boss kill'
+                'Conflict detected. Please try again.'
             ));
         }
-    },
-    async equipRune(req, res) {
-        const transaction = await Rune.sequelize.transaction();
 
-        try {
-            const { id, index } = req.body; // Lấy id và index từ request body
+        return res.status(500).json(formatResponse(
+            false,
+            {},
+            'Error processing boss kill'
+        ));
+    }
+},
 
-            if (!id || index == null) {
-                return res.status(400).json(formatResponse(
-                    false,
-                    {},
-                    'Rune ID and index are required.'
-                ));
-            }
-
-            // Tìm Rune theo ID
-            const rune = await Rune.findByPk(id, { transaction });
-
-            if (!rune) {
-                return res.status(404).json(formatResponse(
-                    false,
-                    {},
-                    'Rune not found.'
-                ));
-            }
-
-            // Cập nhật Rune
-            rune.index = index;
-            rune.isEquipped = true;
-
-            await rune.save({ transaction });
-
-            // Commit transaction
-            await transaction.commit();
-
-            return res.json(formatResponse(
-                true,
-                { rune },
-                'Rune equipped successfully.'
-            ));
-        } catch (error) {
-            // Rollback transaction nếu có lỗi
-            await transaction.rollback();
-            console.error('Error in equipRune:', error);
-
-            return res.status(500).json(formatResponse(
-                false,
-                {},
-                'Error equipping Rune.'
-            ));
-        }
-    },
-    async unequipRune(req, res) {
-        const transaction = await Rune.sequelize.transaction();
-
-        try {
-            const { id } = req.body; // Lấy id từ request body
-
-            if (!id) {
-                return res.status(400).json(formatResponse(
-                    false,
-                    {},
-                    'Rune ID is required.'
-                ));
-            }
-
-            // Tìm Rune theo ID
-            const rune = await Rune.findByPk(id, { transaction });
-
-            if (!rune) {
-                return res.status(404).json(formatResponse(
-                    false,
-                    {},
-                    'Rune not found.'
-                ));
-            }
-
-            // Cập nhật Rune
-            rune.isEquipped = false;
-            rune.index = null; // Reset index nếu muốn
-
-            await rune.save({ transaction });
-
-            // Commit transaction
-            await transaction.commit();
-
-            return res.json(formatResponse(
-                true,
-                { rune },
-                'Rune unequipped successfully.'
-            ));
-        } catch (error) {
-            // Rollback transaction nếu có lỗi
-            await transaction.rollback();
-            console.error('Error in unequipRune:', error);
-
-            return res.status(500).json(formatResponse(
-                false,
-                {},
-                'Error unequipping Rune.'
-            ));
-        }
-    },
-    async buyHero(req, res) {
-        const transaction = await Player.sequelize.transaction();
-
-        try {
-            const player = req.player;
-            const { idHero } = req.body;
-
-            if (!idHero) {
-                return res.status(400).json(formatResponse(
-                    false,
-                    {},
-                    'Hero ID is required.'
-                ));
-            }
-
-            // Check if the player already owns the hero
-            const existingHero = await Hero.findOne({
-                where: {
-                    playerId: player.id,
-                    heroId: idHero
-                },
-                transaction
-            });
-
-            if (existingHero) {
-                return res.status(200).json(formatResponse(
-                    false,
-                    {},
-                    'You already own this hero.'
-                ));
-            }
-
-            if (player.gems < 10000) {
-                return res.status(200).json(formatResponse(
-                    false,
-                    {},
-                    'Not enough gems to buy this hero.'
-                ));
-            }
-
-            // Deduct gems and create the hero
-            await Player.update({
-                gems: player.gems - 10000
-            }, {
-                where: {
-                    id: player.id
-                },
-                transaction
-            });
-            const hero = await Hero.create({
-                ...HERO_BASIC[idHero],
-                playerId: player.id
-            }, { transaction });
-
-            await transaction.commit();
-
-            return res.json(formatResponse(
-                true,
-                { hero },
-                'Hero purchased successfully.'
-            ));
-
-        } catch (error) {
-            await transaction.rollback();
-            console.error('Error in buyHero:', error);
-
-            return res.status(200).json(formatResponse(
-                false,
-                {},
-                'Error purchasing hero.'
-            ));
-        }
-    },
+   async equipRune(req, res) {
+       try {
+           const { id, index } = req.body;
+   
+           if (!id || index == null) {
+               return res.status(400).json(formatResponse(
+                   false,
+                   {},
+                   'Rune ID and index are required.'
+               ));
+           }
+   
+           // Find Rune by ID
+           const rune = await Rune.findByPk(id);
+   
+           if (!rune) {
+               return res.status(404).json(formatResponse(
+                   false,
+                   {},
+                   'Rune not found.'
+               ));
+           }
+   
+           // Update Rune
+           rune.index = index;
+           rune.isEquipped = true;
+   
+           await rune.save();
+   
+           return res.json(formatResponse(
+               true,
+               { rune },
+               'Rune equipped successfully.'
+           ));
+       } catch (error) {
+           console.error('Error in equipRune:', error);
+   
+           return res.status(500).json(formatResponse(
+               false,
+               {},
+               'Error equipping Rune.'
+           ));
+       }
+   },
+   
+   async unequipRune(req, res) {
+       try {
+           const { id } = req.body;
+   
+           if (!id) {
+               return res.status(400).json(formatResponse(
+                   false,
+                   {},
+                   'Rune ID is required.'
+               ));
+           }
+   
+           // Find Rune by ID
+           const rune = await Rune.findByPk(id);
+   
+           if (!rune) {
+               return res.status(404).json(formatResponse(
+                   false,
+                   {},
+                   'Rune not found.'
+               ));
+           }
+   
+           // Update Rune
+           rune.isEquipped = false;
+           rune.index = null; // Reset index
+   
+           await rune.save();
+   
+           return res.json(formatResponse(
+               true,
+               { rune },
+               'Rune unequipped successfully.'
+           ));
+       } catch (error) {
+           console.error('Error in unequipRune:', error);
+   
+           return res.status(500).json(formatResponse(
+               false,
+               {},
+               'Error unequipping Rune.'
+           ));
+       }
+   },
+   
+  async buyHero(req, res) {
+      try {
+          const player = req.player;
+          const { idHero } = req.body;
+  
+          if (!idHero) {
+              return res.status(400).json(formatResponse(
+                  false,
+                  {},
+                  'Hero ID is required.'
+              ));
+          }
+  
+          // Check if the player already owns the hero
+          const existingHero = await Hero.findOne({
+              where: {
+                  playerId: player.id,
+                  heroId: idHero
+              }
+          });
+  
+          if (existingHero) {
+              return res.status(200).json(formatResponse(
+                  false,
+                  {},
+                  'You already own this hero.'
+              ));
+          }
+  
+          if (player.gems < 10000) {
+              return res.status(200).json(formatResponse(
+                  false,
+                  {},
+                  'Not enough gems to buy this hero.'
+              ));
+          }
+  
+          // Deduct gems
+          await Player.update({
+              gems: player.gems - 10000
+          }, {
+              where: {
+                  id: player.id
+              }
+          });
+  
+          // Create the hero
+          const hero = await Hero.create({
+              ...HERO_BASIC[idHero],
+              playerId: player.id
+          });
+  
+          return res.json(formatResponse(
+              true,
+              { hero },
+              'Hero purchased successfully.'
+          ));
+  
+      } catch (error) {
+          console.error('Error in buyHero:', error);
+  
+          return res.status(200).json(formatResponse(
+              false,
+              {},
+              'Error purchasing hero.'
+          ));
+      }
+  }
+  
 
 };
 

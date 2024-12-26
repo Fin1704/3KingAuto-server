@@ -79,11 +79,9 @@ const validateCredentials = (username, password) => {
 // Auth module with improved error handling and performance
 const AuthModule = {
     async register(req, res) {
-        const transaction = await Player.sequelize.transaction();
-
         try {
             const { username, password } = req.body;
-
+    
             // Input validation
             const validationErrors = validateCredentials(username, password);
             if (validationErrors.length > 0) {
@@ -93,39 +91,35 @@ const AuthModule = {
                     errors: validationErrors
                 });
             }
-
+    
             // Check existing user with optimized query
             const existingPlayer = await Player.findOne({ 
                 where: { username: username.toLowerCase().trim() },
                 attributes: ['id'],
-                transaction,
                 raw: true
             });
-
+    
             if (existingPlayer) {
-                await transaction.rollback();
                 return res.status(400).json({ 
                     success: false,
                     message: 'Username already exists' 
                 });
             }
-
+    
             // Create player with secure password hashing
             const hashedPassword = await bcrypt.hash(password, AUTH_CONSTANTS.SALT_ROUNDS);
             const player = await Player.create({
                 username: username.toLowerCase().trim(),
                 password: hashedPassword,
                 gems: 0
-            }, { transaction });
-
+            });
+    
             // Create initial hero
             await Hero.create({
                 ...INITIAL_HERO_STATS,
                 playerId: player.id
-            }, { transaction });
-
-            await transaction.commit();
-
+            });
+    
             // Fetch complete player data efficiently
             const completePlayer = await Player.findByPk(player.id, {
                 include: [
@@ -134,9 +128,9 @@ const AuthModule = {
                 ],
                 raw: false
             });
-
+    
             const token = generateToken(completePlayer);
-
+    
             return res.status(200).json({
                 success: true,
                 message: 'Player registered successfully',
@@ -147,95 +141,97 @@ const AuthModule = {
                     token
                 )
             });
-
+    
         } catch (error) {
-            if (transaction && !transaction.finished) {
-                await transaction.rollback();
-            }
             console.error('Registration error:', error);
             
             if (error.name === 'SequelizeValidationError') {
-                return res.status(200).json({ 
+                return res.status(400).json({ 
                     success: false,
                     message: 'Invalid input data',
                     errors: error.errors.map(e => e.message)
                 });
             }
-
-            return res.status(200).json({ 
+    
+            return res.status(500).json({ 
                 success: false,
                 message: 'Error registering player' 
             });
         }
     },
 
-    async login(req, res) {
-        try {
-            const { username, password } = req.body;
-
-            // Input validation
-            const validationErrors = validateCredentials(username, password);
-            if (validationErrors.length > 0) {
-                return res.status(400).json({ 
-                    success: false,
-                    message: validationErrors[0],
-                    errors: validationErrors
-                });
-            }
-
-            // Efficient player query with necessary includes
-            const player = await Player.findOne({ 
-                where: { username: username.toLowerCase().trim() },
-                include: [
-                    { 
-                        model: Hero,
-                        as: 'heroes',
-                        required: false,
-                        attributes: ['heroId', 'level', 'hp', 'attackMin', 'attackMax', 'defense', 'moveSpeed', 'attackSpeed']
-                    },
-                    { 
-                        model: Rune,
-                        as: 'runes',
-                        required: false,
-                        attributes: ['id', 'runeId', 'isEquipped', 'index']
-                    }
-                ]
-            });
-
-            if (!player) {
-                return res.status(401).json({ 
-                    success: false,
-                    message: 'Invalid credentials' 
-                });
-            }
-
-            const validPassword = await bcrypt.compare(password, player.password);
-            if (!validPassword) {
-                return res.status(401).json({ 
-                    success: false,
-                    message: 'Invalid credentials' 
-                });
-            }
-
-            const token = generateToken(player);
-
-            // Update last login timestamp
-            await player.update({ lastLoginAt: new Date() });
-
-            return res.json({
-                success: true,
-                message: 'Login successful',
-                ...formatPlayerResponse(player, player.heroes, player.runes, token)
-            });
-
-        } catch (error) {
-            console.error('Login error:', error);
-            return res.status(500).json({ 
-                success: false,
-                message: 'Error logging in' 
-            });
-        }
-    }
+   async login(req, res) {
+       try {
+           const { username, password } = req.body;
+   
+           // Input validation
+           const validationErrors = validateCredentials(username, password);
+           if (validationErrors.length > 0) {
+               return res.status(400).json({ 
+                   success: false,
+                   message: validationErrors[0],
+                   errors: validationErrors
+               });
+           }
+   
+           // Efficient player query with necessary includes
+           const player = await Player.findOne({ 
+               where: { username: username.toLowerCase().trim() },
+               include: [
+                   { 
+                       model: Hero,
+                       as: 'heroes',
+                       required: false,
+                       attributes: ['heroId', 'level', 'hp', 'attackMin', 'attackMax', 'defense', 'moveSpeed', 'attackSpeed']
+                   },
+                   { 
+                       model: Rune,
+                       as: 'runes',
+                       required: false,
+                       attributes: ['id', 'runeId', 'isEquipped', 'index']
+                   }
+               ],
+               attributes: ['id', 'username', 'password', 'gems'] // Optimize by selecting only needed fields
+           });
+   
+           if (!player) {
+               return res.status(401).json({ 
+                   success: false,
+                   message: 'Invalid credentials' 
+               });
+           }
+   
+           const validPassword = await bcrypt.compare(password, player.password);
+           if (!validPassword) {
+               return res.status(401).json({ 
+                   success: false,
+                   message: 'Invalid credentials' 
+               });
+           }
+   
+           const token = generateToken(player);
+   
+           // Update last login timestamp
+           await Player.update(
+               { lastLoginAt: new Date() },
+               { where: { id: player.id } }
+           );
+   
+           return res.json({
+               success: true,
+               message: 'Login successful',
+               ...formatPlayerResponse(player, player.heroes, player.runes, token)
+           });
+   
+       } catch (error) {
+           console.error('Login error:', error);
+           return res.status(500).json({ 
+               success: false,
+               message: 'Error logging in' 
+           });
+       }
+   }
+   
 };
 
 module.exports = AuthModule;

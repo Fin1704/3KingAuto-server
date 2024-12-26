@@ -1,4 +1,5 @@
 const { Sequelize } = require('sequelize');
+const { logger } = require('sequelize/lib/utils/logger');
 require('dotenv').config();
 // Create Sequelize instance
 const sequelize = new Sequelize(
@@ -15,7 +16,7 @@ const sequelize = new Sequelize(
             acquire: 30000,
             idle: 10000
         }
-    }
+    },
 );
 
 // Test the connection
