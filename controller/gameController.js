@@ -173,7 +173,45 @@ const GameModule = {
            ));
        }
    },
-   
+   async getTop10Gems(req, res) {
+    try {
+        // Fetch the top 10 players sorted by gems in descending order
+        const topPlayers = await Player.findAll({
+            attributes: ['id', 'username', 'gems'], // Replace 'name' with the actual player name field if different
+            order: [['gems', 'DESC']],
+            limit: 10
+        });
+
+        if (!topPlayers.length) {
+            return res.status(404).json(formatResponse(
+                false,
+                {},
+                'No players found.'
+            ));
+        }
+
+        // Add rank to each player
+        const rankedPlayers = topPlayers.map((player, index) => ({
+            ...player.toJSON(),
+            rank: index + 1
+        }));
+
+        return res.status(200).json(formatResponse(
+            true,
+            { topPlayers: rankedPlayers },
+            'Top 10 players fetched successfully.'
+        ));
+    } catch (error) {
+        console.error('Error in getTop10Gems:', error);
+
+        return res.status(500).json(formatResponse(
+            false,
+            {},
+            'Error fetching top 10 players.'
+        ));
+    }
+},
+
 async killBoss(req, res) {
     try {
         const player = req.player;

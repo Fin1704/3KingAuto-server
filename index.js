@@ -1,6 +1,7 @@
 require('dotenv').config();
 const fs = require('fs');
 const https = require('https');
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const sequelize = require('./db');
@@ -9,11 +10,11 @@ const gameRoutes = require('./routes/gameRoutes');
 
 const app = express();
 
-// Cấu hình CORS
+// CORS configuration
 app.use(cors({
-    origin: '*', // Cho phép tất cả origin
-    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Cho phép các phương thức
-    allowedHeaders: ['Content-Type', 'Authorization'], // Cho phép các header
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 // Middleware
@@ -49,13 +50,21 @@ const sslOptions = {
 const startServer = async () => {
     try {
         // Sync database
-        await sequelize.sync({ alter: true }); // Use { force: true } to recreate tables (careful in production!)
+        await sequelize.sync({ alter: true });
         console.log('Database synchronized successfully');
 
-        // Start HTTPS server
-        https.createServer(sslOptions, app).listen(PORT, () => {
-            console.log(`Secure server is running on https://localhost:${PORT}`);
-        });
+        // Start server based on ENV.TYPE
+        if (process.env.TYPE === '1') {
+            // HTTPS server
+            https.createServer(sslOptions, app).listen(PORT, () => {
+                console.log(`Secure server is running on https://localhost:${PORT}`);
+            });
+        } else {
+            // HTTP server
+            http.createServer(app).listen(PORT, () => {
+                console.log(`Server is running on http://localhost:${PORT}`);
+            });
+        }
     } catch (error) {
         console.error('Failed to start server:', error);
         process.exit(1);

@@ -11,5 +11,5 @@ router.post('/kill-boss', authMiddleware, gameController.killBoss);
 router.post('/equip-rune', authMiddleware, gameController.equipRune);
 router.post('/unequip-rune', authMiddleware, gameController.unequipRune);
 router.post('/buy-hero', authMiddleware, gameController.buyHero);
-
+router.get('/top',authMiddleware,gameController.getTop10Gems)
 module.exports = router;
