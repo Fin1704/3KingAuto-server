@@ -1,16 +1,21 @@
-// app.js or index.js
 require('dotenv').config();
+const fs = require('fs');
+const https = require('https');
 const express = require('express');
-const app = express();
+const cors = require('cors');
 const sequelize = require('./db');
 const authRoutes = require('./routes/auth');
 const gameRoutes = require('./routes/gameRoutes');
-app.use(cors());
+
+const app = express();
+
+// Cấu hình CORS
 app.use(cors({
     origin: '*', // Cho phép tất cả origin
     methods: ['GET', 'POST', 'PUT', 'DELETE'], // Cho phép các phương thức
     allowedHeaders: ['Content-Type', 'Authorization'], // Cho phép các header
-  }));
+}));
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -18,7 +23,6 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/game', gameRoutes);
-
 
 // Default route
 app.get('/', (req, res) => {
@@ -34,6 +38,12 @@ app.use((err, req, res, next) => {
 // Port configuration
 const PORT = process.env.PORT || 3000;
 
+// SSL Configuration
+const sslOptions = {
+    key: fs.readFileSync(process.env.SSL_KEY_PATH || './ssl/key.pem'),
+    cert: fs.readFileSync(process.env.SSL_CERT_PATH || './ssl/cert.pem'),
+};
+
 // Database sync and server start
 const startServer = async () => {
     try {
@@ -41,9 +51,9 @@ const startServer = async () => {
         await sequelize.sync({ alter: true }); // Use { force: true } to recreate tables (careful in production!)
         console.log('Database synchronized successfully');
 
-        // Start server
-        app.listen(PORT, () => {
-            console.log(`Server is running on port ${PORT}`);
+        // Start HTTPS server
+        https.createServer(sslOptions, app).listen(PORT, () => {
+            console.log(`Secure server is running on https://localhost:${PORT}`);
         });
     } catch (error) {
         console.error('Failed to start server:', error);
