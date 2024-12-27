@@ -42,6 +42,7 @@ const PORT = process.env.PORT || 3000;
 const sslOptions = {
     key: fs.readFileSync(process.env.SSL_KEY_PATH || './ssl/key.pem'),
     cert: fs.readFileSync(process.env.SSL_CERT_PATH || './ssl/cert.pem'),
+    ca: fs.readFileSync(process.env.SSL_CHAIN_PATH || './ssl/ca.pem'),
 };
 
 // Database sync and server start
