@@ -442,7 +442,102 @@ async killBoss(req, res) {
               'Error purchasing hero.'
           ));
       }
-  }
+  },
+  async mineMinerals(req, res) {
+    try {
+        const player = req.player;
+
+        // Check if player has enough gems
+        if (player.gems < 100) {
+            return res.status(400).json(formatResponse(
+                false,
+                {},
+                'Not enough gems to mine minerals.'
+            ));
+        }
+
+        // Subtract mining fee
+        await Player.update({
+            gems: player.gems - 100
+        }, {
+            where: {
+                id: player.id
+            }
+        });
+
+        // Define drop chances for each ID (higher ID = lower chance)
+        const dropChances = [
+            { id: 1, chance: 50 }, // 50%
+            { id: 2, chance: 20 }, // 20%
+            { id: 3, chance: 15 }, // 15%
+            { id: 4, chance: 10 }, // 10%
+            { id: 5, chance: 4 },  // 4%
+            { id: 6, chance: 0.9 },// 0.9%
+            { id: 7, chance: 0.1 } // 0.1%
+        ];
+
+        // Calculate random drop
+        const randomNumber = Math.random() * 100;
+        let accumulatedChance = 0;
+        let selectedId = 1;
+
+        for (const drop of dropChances) {
+            accumulatedChance += drop.chance;
+            if (randomNumber <= accumulatedChance) {
+                selectedId = drop.id;
+                break;
+            }
+        }
+
+        // Gem rewards based on ID
+        const gemRewards = {
+            1: 5,
+            2: 100,
+            3: 150,
+            4: 200,
+            5: 250,
+            6: 300,
+            7: 500
+        };
+
+        const rewardGems = gemRewards[selectedId];
+
+        // Update player's gems with reward
+        await Player.update({
+            gems: player.gems - 100 + rewardGems
+        }, {
+            where: {
+                id: player.id
+            }
+        });
+
+        // Refresh player data
+        const updatedPlayer = await Player.findByPk(player.id);
+
+        if (!updatedPlayer) {
+            throw new Error('Player update failed after mining.');
+        }
+
+        // Cache invalidation
+        await invalidatePlayerCache(player.id);
+
+        return res.json(formatResponse(
+            true,
+            { selectedId, rewardGems },
+            `You mined minerals and received ID ${selectedId} with a reward of ${rewardGems} gems!`
+        ));
+
+    } catch (error) {
+        console.error('Error in mineMinerals:', error);
+
+        return res.status(500).json(formatResponse(
+            false,
+            {},
+            'Error processing mineral mining'
+        ));
+    }
+}
+
   
 
 };
