@@ -10,6 +10,17 @@ const HERO_BASIC = {
         attackSpeed: 1.2,
         moveSpeed: 1,
         hp: 250
+    },
+    3: {
+        heroId: 3,
+        level: 1,
+        exp: 1,
+        attackMin: 20,
+        attackMax: 30,
+        defense: 7,
+        attackSpeed: 1.2,
+        moveSpeed: 1,
+        hp: 200
     }
 };
 
