@@ -39,7 +39,8 @@ const formatPlayerResponse = (player, heroes, runes, token) => ({
     player: {
         id: player.id,
         username: player.username,
-        gems: player.gems || 0
+        gems: player.gems || 0,
+        lastDailyReward:player.lastDailyReward ||0
     },
     characters: heroes?.map(hero => ({
         id: hero.heroId,
@@ -192,23 +193,22 @@ const AuthModule = {
                        attributes: ['id', 'runeId', 'isEquipped', 'index']
                    }
                ],
-               attributes: ['id', 'username', 'password', 'gems'] // Optimize by selecting only needed fields
+               attributes: ['id', 'username', 'password', 'gems','lastDailyReward'] // Optimize by selecting only needed fields
            });
    
            if (!player) {
                return res.status(401).json({ 
                    success: false,
-                   message: 'Invalid credentials' 
+                   message: 'Incorrect login information' 
                });
            }
            const hashedPassword = await bcrypt.hash(password, AUTH_CONSTANTS.SALT_ROUNDS);
 
-   console.log(password,hashedPassword,player.password)
            const validPassword = await bcrypt.compare(password, player.password);
            if (!validPassword) {
                return res.status(401).json({ 
                    success: false,
-                   message: 'Invalid credentials' 
+                   message: 'Incorrect login information' 
                });
            }
    

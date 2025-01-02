@@ -50,6 +50,21 @@ const formatResponseWithRunes = (success, data = {}, message = '') => {
         message
     };
 };
+const formatResponseWithRunesAndGems = (success, data = {}, message = '') => {
+    data.newRune.key = data.newRune.id;
+    data.newRune.id = data.newRune.runeId;
+    return {
+        success,
+        newRune: {
+            key: data.newRune.id,
+            id: data.newRune.runeId,
+            isEquipped: data.newRune.isEquipped,
+            index: data.newRune.index || 0,
+        },
+        gems:data.gems,
+        message
+    };
+};
 function generateRandomString() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
     let result = '';
@@ -548,10 +563,80 @@ const GameModule = {
                 'Error processing mineral mining'
             ));
         }
+    },
+    async dailyLoginReward(req, res) {
+        try {
+            const player = req.player; 
+    
+            const today = new Date().toISOString().slice(0, 10);
+    
+            if (player.lastDailyReward === today) {
+                return res.status(400).json(formatResponse(
+                    false,
+                    {},
+                    'You have already claimed your daily reward today!'
+                ));
+            }
+    
+            const gems = getRandomGems(500,2000); 
+            await Player.update({
+                gems: player.gems+gems,
+                // lastDailyReward: today
+            }, {
+                where: {
+                    id: player.id
+                }
+            });
+
+            // Create random rune
+            const randomRuneId = Math.floor(Math.random() * 10) + 1;
+            const newRune = await Rune.create({
+                playerId: player.id,
+                runeId: randomRuneId,
+                isEquipped: false,
+                index: null
+            });
+
+            const updatedPlayer = await Player.findByPk(player.id);
+    
+    
+            if (!updatedPlayer) {
+                throw new Error("Player update failed");
+            }
+    
+            // Cache invalidation
+            await invalidatePlayerCache(player.id);
+    
+            return res.json(formatResponseWithRunesAndGems(
+                true,
+                { newRune,gems },
+                'Claim Daily Reward Successfully! A new rune has been awarded.'
+            ));
+    
+        } catch (error) {
+            console.error('Error in dailyLoginReward:', error);
+    
+            if (error.name === 'SequelizeOptimisticLockError') {
+                return res.status(409).json(formatResponse(
+                    false,
+                    {},
+                    'Conflict detected. Please try again.'
+                ));
+            }
+    
+            return res.status(500).json(formatResponse(
+                false,
+                {},
+                'Error processing Claim Daily Reward'
+            ));
+        }
     }
+    
 
 
 
 };
-
+function getRandomGems(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
 module.exports = GameModule;

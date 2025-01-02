@@ -88,6 +88,10 @@ const Player = sequelize.define('Player', {
     lastLoginAt: {
         type: DataTypes.DATE,
         allowNull: true
+    },
+    lastDailyReward: { // Thêm trường mới
+        type: DataTypes.DATEONLY, // Chỉ lưu ngày (YYYY-MM-DD)
+        allowNull: true, // Ban đầu sẽ là null
     }
 }, {
     tableName: 'players',

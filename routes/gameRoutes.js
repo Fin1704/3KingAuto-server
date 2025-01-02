@@ -13,4 +13,6 @@ router.post('/unequip-rune', authMiddleware, gameController.unequipRune);
 router.post('/buy-hero', authMiddleware, gameController.buyHero);
 router.get('/top',authMiddleware,gameController.getTop10Gems)
 router.get('/miner', authMiddleware, gameController.mineMinerals)
+router.get('/daily-reward', authMiddleware, gameController.dailyLoginReward)
+
 module.exports = router;
