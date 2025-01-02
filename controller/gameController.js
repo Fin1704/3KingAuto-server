@@ -581,7 +581,7 @@ const GameModule = {
             const gems = getRandomGems(500,2000); 
             await Player.update({
                 gems: player.gems+gems,
-                // lastDailyReward: today
+                lastDailyReward: today
             }, {
                 where: {
                     id: player.id
